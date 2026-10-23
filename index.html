@@ -6,7 +6,7 @@
   <title>Banderillero Satelital Agrícola Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Inmoviliza la página para evitar que el navegador haga zoom o se desplace */
+    /* Inmoviliza la página web para evitar zoom/scroll no deseado del navegador */
     html, body {
       touch-action: none;
       overflow: hidden;
@@ -21,7 +21,7 @@
 </head>
 <body class="bg-gray-900 text-white select-none h-screen w-screen flex flex-col font-sans overflow-hidden">
 
-  <!-- Header / Barra Superior con Barra de Luces (Lightbar) -->
+  <!-- Header / Barra Superior con Lightbar LED -->
   <header class="bg-gray-800 border-b border-gray-700 p-3 flex flex-col gap-2 shrink-0">
     <div class="flex justify-between items-center">
       <div class="flex items-center gap-2">
@@ -31,49 +31,54 @@
       <div class="flex gap-2">
         <button id="btn-mode-sim" onclick="setMode('sim')" class="px-3 py-1 text-xs font-bold rounded bg-blue-600 hover:bg-blue-500">Simulador</button>
         <button id="btn-mode-gps" onclick="setMode('gps')" class="px-3 py-1 text-xs font-bold rounded bg-gray-700 hover:bg-gray-600">GPS Interno</button>
-        <button id="btn-mode-ext" onclick="setMode('ext')" class="px-3 py-1 text-xs font-bold rounded bg-gray-700 hover:bg-gray-600">GPS NMEA/Serial</button>
+        <button id="btn-mode-ext" onclick="setMode('ext')" class="px-3 py-1 text-xs font-bold rounded bg-gray-700 hover:bg-gray-600">GPS NMEA</button>
       </div>
     </div>
 
-    <!-- Lightbar LED (Indicador XTE) -->
+    <!-- Lightbar LED (Indicador XTE / Desvío) -->
     <div class="flex items-center justify-center gap-1 bg-black p-2 rounded-lg border border-gray-700">
       <span class="text-xs text-gray-400 mr-1">IZQ</span>
-      <div id="lightbar" class="flex gap-1">
-        <!-- Generado dinámicamente -->
-      </div>
+      <div id="lightbar" class="flex gap-1"></div>
       <span class="text-xs text-gray-400 ml-1">DER</span>
     </div>
   </header>
 
-  <!-- Panel Principal: Canvas + Métricas -->
+  <!-- Panel Principal: Canvas + Controles Flotantes -->
   <div class="relative flex-1 bg-black overflow-hidden">
     
-    <!-- Canvas 2D -->
+    <!-- Lienzo del Mapa -->
     <canvas id="mapCanvas" class="w-full h-full block cursor-crosshair"></canvas>
 
-    <!-- Overlay Controles de Zoom en Pantalla -->
+    <!-- Controles de Zoom y Centrado (Derecha) -->
     <div class="absolute top-4 right-4 flex flex-col gap-2 z-10">
       <button onclick="zoomIn()" class="w-12 h-12 bg-gray-800/90 hover:bg-gray-700 active:bg-gray-600 border border-gray-600 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg text-white">+</button>
       <button onclick="zoomOut()" class="w-12 h-12 bg-gray-800/90 hover:bg-gray-700 active:bg-gray-600 border border-gray-600 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg text-white">-</button>
       <button onclick="recenterMap()" class="w-12 h-12 bg-gray-800/90 hover:bg-gray-700 active:bg-gray-600 border border-gray-600 rounded-full flex items-center justify-center text-lg shadow-lg text-white">🎯</button>
     </div>
 
-    <!-- Panel de Controles A-B y Configuración de Ancho -->
+    <!-- Panel de Líneas A-B, Ancho y Botón de Pintar (Izquierda) -->
     <div class="absolute top-4 left-4 flex flex-col gap-2 z-10">
+      <!-- Botones A-B -->
       <div class="bg-gray-900/90 backdrop-blur border border-gray-700 p-2 rounded-lg flex gap-2">
-        <button id="btn-pointA" onclick="setPointA()" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 font-bold text-xs rounded shadow">Punto A</button>
-        <button id="btn-pointB" onclick="setPointB()" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 font-bold text-xs rounded shadow">Punto B</button>
-        <button onclick="clearAB()" class="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-xs rounded">Limpiar AB</button>
+        <button onclick="setPointA()" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 font-bold text-xs rounded shadow">Punto A</button>
+        <button onclick="setPointB()" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 font-bold text-xs rounded shadow">Punto B</button>
+        <button onclick="clearAB()" class="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-xs rounded">Limpiar</button>
       </div>
 
-      <!-- Configuración Ancho de Trabajo -->
-      <div class="bg-gray-900/90 backdrop-blur border border-gray-700 p-2 rounded-lg flex items-center gap-2">
-        <label class="text-xs text-gray-300 font-medium">Ancho (m):</label>
-        <input type="number" id="input-width" value="12.0" step="0.5" min="1" class="w-16 bg-gray-800 border border-gray-600 text-center text-xs p-1 rounded text-white font-bold" onchange="updateWidth(this.value)">
+      <!-- Ancho de Trabajo y Botón de Pintar/Aplicación -->
+      <div class="bg-gray-900/90 backdrop-blur border border-gray-700 p-2.5 rounded-lg flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-300 font-medium">Ancho (m):</label>
+          <input type="number" id="input-width" value="12.0" step="0.5" min="1" class="w-16 bg-gray-800 border border-gray-600 text-center text-xs p-1 rounded text-white font-bold" onchange="updateWidth(this.value)">
+        </div>
+        <!-- Botón de Pintar / Aplicación -->
+        <button id="btn-paint" onclick="togglePaint()" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 font-bold text-xs rounded shadow text-white transition-colors">
+          Pintar: ON
+        </button>
       </div>
     </div>
 
-    <!-- Panel de Métricas Flotante -->
+    <!-- Panel de Métricas Flotante (Abajo) -->
     <div class="absolute bottom-4 left-4 right-4 md:left-4 md:right-auto bg-gray-900/90 backdrop-blur border border-gray-700 p-3 rounded-xl flex justify-between md:justify-start gap-4 text-center z-10 shadow-xl">
       <div>
         <div class="text-xs text-gray-400 uppercase">Velocidad</div>
@@ -93,8 +98,8 @@
       </div>
     </div>
 
-    <!-- Panel Simulador -->
-    <div id="sim-controls" class="absolute bottom-20 right-4 bg-gray-900/90 backdrop-blur border border-gray-700 p-3 rounded-xl flex flex-col gap-2 z-10 w-48">
+    <!-- Panel Simulador (Derecha Abajo) -->
+    <div id="sim-controls" class="absolute bottom-20 right-4 bg-gray-900/90 backdrop-blur border border-gray-700 p-3 rounded-xl flex flex-col gap-2 z-10 w-48 shadow-xl">
       <div class="text-xs font-bold text-gray-400 border-b border-gray-700 pb-1">Controles Simulador</div>
       <div class="flex items-center justify-between">
         <span class="text-xs">Acelerar:</span>
@@ -111,33 +116,26 @@
     // --- ESTADO GLOBAL ---
     let mode = 'sim';
     let zoomLevel = 3.0;
+    let isPainting = true; // Interruptor de aplicación/pintado
 
-    // Posición del vehículo
     let posX = 0, posY = 0; 
     let heading = 0; 
     let speedKmH = 0;
 
-    // Coordenadas GPS Base
     let originLat = null, originLon = null;
-
-    // Configuración Agrícola
     let implementWidth = 12.0;
     let pointA = null, pointB = null;
     let abHeading = null;
 
-    // Historial de cobertura
     let coveragePath = []; 
     let totalAreaM2 = 0;
 
-    // Simulador
     let simSpeed = 10;
     let simSteer = 0;
 
-    // Elementos DOM
     const canvas = document.getElementById('mapCanvas');
     const ctx = canvas.getContext('2d');
 
-    // --- INICIALIZACIÓN ---
     function init() {
       resizeCanvas();
       window.addEventListener('resize', resizeCanvas);
@@ -151,51 +149,42 @@
       canvas.height = canvas.parentElement.clientHeight;
     }
 
-    // --- CONTROLES DE ZOOM ---
-    function zoomIn() {
-      zoomLevel = Math.min(zoomLevel * 1.25, 15.0);
+    function zoomIn() { zoomLevel = Math.min(zoomLevel * 1.25, 15.0); }
+    function zoomOut() { zoomLevel = Math.max(zoomLevel / 1.25, 0.5); }
+    function recenterMap() {}
+    function updateWidth(val) { implementWidth = parseFloat(val) || 12.0; }
+
+    function togglePaint() {
+      isPainting = !isPainting;
+      const btn = document.getElementById('btn-paint');
+      if (isPainting) {
+        btn.className = 'px-3 py-1.5 bg-green-600 hover:bg-green-500 font-bold text-xs rounded shadow text-white transition-colors';
+        btn.innerText = 'Pintar: ON';
+      } else {
+        btn.className = 'px-3 py-1.5 bg-red-600 hover:bg-red-500 font-bold text-xs rounded shadow text-white transition-colors';
+        btn.innerText = 'Pintar: OFF';
+      }
     }
 
-    function zoomOut() {
-      zoomLevel = Math.max(zoomLevel / 1.25, 0.5);
-    }
-
-    function recenterMap() {
-      // Re-centra suavemente
-    }
-
-    function updateWidth(val) {
-      implementWidth = parseFloat(val) || 12.0;
-    }
-
-    // --- BLOQUEO DE ZOOM NATIVO DEL NAVEGADOR ---
     function setupTouchControls() {
       let lastTouchDist = 0;
-
       document.addEventListener('touchmove', (e) => {
         if (e.touches.length > 1) e.preventDefault();
       }, { passive: false });
 
       canvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
-          lastTouchDist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-          );
+          lastTouchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         }
       }, { passive: false });
 
       canvas.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2) {
           e.preventDefault();
-          const dist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-          );
+          const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
           const delta = dist - lastTouchDist;
           if (Math.abs(delta) > 5) {
-            if (delta > 0) zoomIn();
-            else zoomOut();
+            if (delta > 0) zoomIn(); else zoomOut();
             lastTouchDist = dist;
           }
         }
@@ -203,12 +192,10 @@
 
       canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
-        if (e.deltaY < 0) zoomIn();
-        else zoomOut();
+        if (e.deltaY < 0) zoomIn(); else zoomOut();
       }, { passive: false });
     }
 
-    // --- LIGHTBAR LED ---
     function buildLightbar() {
       const container = document.getElementById('lightbar');
       container.innerHTML = '';
@@ -238,39 +225,22 @@
       }
     }
 
-    // --- CONFIGURACIÓN DE LÍNEA A-B ---
-    function setPointA() {
-      pointA = { x: posX, y: posY };
-      if (pointB) calculateAB();
-    }
-
-    function setPointB() {
-      pointB = { x: posX, y: posY };
-      if (pointA) calculateAB();
-    }
-
-    function clearAB() {
-      pointA = null;
-      pointB = null;
-      abHeading = null;
-    }
-
+    function setPointA() { pointA = { x: posX, y: posY }; if (pointB) calculateAB(); }
+    function setPointB() { pointB = { x: posX, y: posY }; if (pointA) calculateAB(); }
+    function clearAB() { pointA = null; pointB = null; abHeading = null; }
     function calculateAB() {
       const dx = pointB.x - pointA.x;
       const dy = pointB.y - pointA.y;
       abHeading = Math.atan2(dx, dy);
     }
 
-    // --- BUCLE PRINCIPAL ---
     let lastTime = performance.now();
-
     function gameLoop(now) {
       const dt = (now - lastTime) / 1000;
       lastTime = now;
 
       updatePhysics(dt);
       renderMap();
-
       requestAnimationFrame(gameLoop);
     }
 
@@ -280,12 +250,12 @@
         heading += (simSteer * (speedKmH / 10)) * dt;
         const speedMS = speedKmH / 3.6;
         const rad = heading * Math.PI / 180;
-        
         posX += Math.sin(rad) * speedMS * dt;
         posY += Math.cos(rad) * speedMS * dt;
       }
 
-      if (speedKmH > 0.5) {
+      // Solo pinta si está activo el botón y hay movimiento
+      if (isPainting && speedKmH > 0.5) {
         coveragePath.push({ x: posX, y: posY, width: implementWidth });
         totalAreaM2 += (speedKmH / 3.6) * implementWidth * dt;
       }
@@ -296,9 +266,7 @@
       if (pointA && abHeading !== null) {
         const dx = posX - pointA.x;
         const dy = posY - pointA.y;
-        
         const perpDist = dx * Math.cos(abHeading) - dy * Math.sin(abHeading);
-        
         currentPass = Math.round(perpDist / implementWidth);
         xte = perpDist - (currentPass * implementWidth);
       }
@@ -311,10 +279,8 @@
       updateLightbar(xte);
     }
 
-    // --- RENDERIZADO DEL MAPA ---
     function renderMap() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       ctx.save();
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
@@ -323,18 +289,9 @@
       ctx.scale(zoomLevel, -zoomLevel);
       ctx.translate(-posX, -posY);
 
-      // 1. Grilla
       drawGrid();
-
-      // 2. Cobertura
       drawCoverage();
-
-      // 3. Líneas A-B
-      if (pointA && abHeading !== null) {
-        drawABLines();
-      }
-
-      // 4. Tractor
+      if (pointA && abHeading !== null) drawABLines();
       drawTractor();
 
       ctx.restore();
@@ -355,19 +312,16 @@
 
       ctx.beginPath();
       for (let x = startX; x < maxX; x += gridSize) {
-        ctx.moveTo(x, minY);
-        ctx.lineTo(x, maxY);
+        ctx.moveTo(x, minY); ctx.lineTo(x, maxY);
       }
       for (let y = startY; y < maxY; y += gridSize) {
-        ctx.moveTo(minX, y);
-        ctx.lineTo(maxX, y);
+        ctx.moveTo(minX, y); ctx.lineTo(maxX, y);
       }
       ctx.stroke();
     }
 
     function drawCoverage() {
       if (coveragePath.length < 2) return;
-
       ctx.strokeStyle = 'rgba(34, 197, 94, 0.4)';
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -376,7 +330,6 @@
         const p1 = coveragePath[i - 1];
         const p2 = coveragePath[i];
         ctx.lineWidth = p2.width;
-
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
@@ -393,7 +346,7 @@
         const startX = pointA.x + Math.cos(abHeading) * offset - Math.sin(abHeading) * lineLength;
         const startY = pointA.y - Math.sin(abHeading) * offset - Math.cos(abHeading) * lineLength;
         const endX = pointA.x + Math.cos(abHeading) * offset + Math.sin(abHeading) * lineLength;
-        const endY = pointA.y - Math.sin(abHeading) * offset + Math.cos(abHeading) * lineLength;
+        const endY = pointA.y - Math.sin(abHeading) * offset - Math.cos(abHeading) * lineLength;
 
         ctx.strokeStyle = (i === 0) ? '#38bdf8' : 'rgba(255, 255, 255, 0.2)';
         ctx.beginPath();
@@ -408,7 +361,7 @@
       ctx.translate(posX, posY);
       ctx.rotate(-heading * Math.PI / 180);
 
-      // Barral / Implemento
+      // Implemento
       ctx.fillStyle = '#eab308';
       ctx.fillRect(-implementWidth / 2, -0.5, implementWidth, 1);
 
@@ -424,7 +377,6 @@
       ctx.restore();
     }
 
-    // --- CAMBIO DE MODO ---
     function setMode(m) {
       mode = m;
       document.getElementById('sim-controls').style.display = (m === 'sim') ? 'flex' : 'none';
@@ -467,13 +419,10 @@
           posX = (lon - originLon) * (111320 * Math.cos(lat * Math.PI / 180));
           posY = (lat - originLat) * 111320;
 
-        }, (err) => {
+        }, () => {
           status.innerText = 'Error GPS';
           status.className = 'px-2 py-0.5 text-xs rounded-full bg-red-600 text-white font-semibold';
-        }, {
-          enableHighAccuracy: true,
-          maximumAge: 0
-        });
+        }, { enableHighAccuracy: true, maximumAge: 0 });
       }
     }
 
