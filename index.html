@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Banderillero Satelital Agrícola Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        agri: {
+                            dark: '#0f172a',
+                            card: '#1e293b',
+                            accent: '#22c55e',
+                            yellow: '#eab308',
+                            red: '#ef4444',
+                            trimble: '#005f9e',
+                            deere: '#367c2b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+            background-color: #090d16;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .led-glow-green {
+            box-shadow: 0 0 12px #22c55e, inset 0 0 4px #86efac;
+        }
+        .led-glow-yellow {
+            box-shadow: 0 0 12px #eab308, inset 0 0 4px #fef08a;
+        }
+        .led-glow-red {
+            box-shadow: 0 0 12px #ef4444, inset 0 0 4px #fca5a5;
+        }
+    </style>
+</head>
+<body class="text-slate-100 h-screen w-screen flex flex-col justify-between">
+
+    <!-- BARRA SUPERIOR DE LUCES (LIGHTBAR / XTE INDICATOR) -->
+    <header class="bg-slate-900 border-b border-slate-800 p-2 shadow-lg flex-none z-20">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
+            
+            <!-- Estado & Error Lateral -->
+            <div class="flex items-center justify-between w-full md:w-auto gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-3 h-3 rounded-full bg-slate-600" id="gpsStatusDot"></span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400" id="gpsStatusText">GPS Desconectado</span>
+                </div>
+                
+                <div class="text-right md:hidden">
+                    <span class="text-xs text-slate-400">XTE:</span>
+                    <span class="text-xl font-black font-mono" id="xteValueMobile">0.00 m</span>
+                </div>
+            </div>
+
+            <!-- LED BAR GUIDANCE (BARRA DE LUCES) -->
+            <div class="flex-1 w-full max-w-2xl px-2">
+                <div class="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800 shadow-inner">
+                    <!-- Izquierda (Rojo / Amarillo) -->
+                    <div class="flex gap-1 flex-1 justify-end pr-2">
+                        <div id="led-L3" class="w-full max-w-[28px] h-7 rounded bg-slate-800 transition-all duration-75"></div>
+                        <div id="led-L2" class="w-full max-w-[28px] h-7 rounded bg-slate-800 transition-all duration-75"></div>
+                        <div id="led-L1" class="w-full max-w-[28px] h-7 rounded bg-slate-800 transition-all duration-75"></div>
+                    </div>
+
+                    <!-- Centro (Verde - En línea) -->
+                    <div class="flex gap-1 px-1 border-x border-slate-800">
+                        <div id="led-C" class="w-8 h-8 rounded bg-slate-800 transition-all duration-75 flex items-center justify-center font-bold text-xs">
+                            <i class="fa-solid fa-location-crosshairs text-slate-600"></i>
+                        </div>
+                    </div>
+
+                    <!-- Derecha (Rojo / Amarillo) -->
+                    <div class="flex gap-1 flex-1 justify-start pl-2">
+                        <div id="led-R1" class="w-full max-w-[28px] h-7 rounded bg-slate-800 transition-all duration-75"></div>
+                        <div id="led-R2" class="w-full max-w-[28px] h-7 rounded bg-slate-800 transition-all duration-75"></div>
+                        <div id="led-R3" class="w-full max-w-[28px] h-7 rounded bg-slate-800 transition-all duration-75"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lectura XTE Desktop & Audio Toggle -->
+            <div class="hidden md:flex items-center gap-4">
+                <div class="text-right">
+                    <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Desviación XTE</div>
+                    <div class="text-2xl font-black font-mono text-emerald-400" id="xteValueDesktop">0.00 m</div>
+                </div>
+                <button id="btnAudio" onclick="toggleAudio()" class="p-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition border border-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-volume-xmark text-lg" id="audioIcon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN APP AREA (CANVAS + OVERLAY CONTROL PANELS) -->
+    <main class="relative flex-1 w-full h-full overflow-hidden bg-slate-950">
+
+        <!-- VISUAL CANVAS 2D -->
+        <canvas id="fieldCanvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+        <!-- DISPLAY METRICAS FLOTANTES SUP. IZQUIERDA -->
+        <div class="absolute top-4 left-4 z-10 flex flex-col gap-2 pointer-events-none">
+            <div class="bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-3 shadow-xl flex items-center gap-4">
+                <div class="text-center border-r border-slate-700/60 pr-4">
+                    <div class="text-[10px] font-bold uppercase text-slate-400">Velocidad</div>
+                    <div class="text-3xl font-black font-mono text-white" id="valSpeed">0.0</div>
+                    <div class="text-[10px] text-slate-500 font-bold">km/h</div>
+                </div>
+                <div class="text-center border-r border-slate-700/60 pr-4">
+                    <div class="text-[10px] font-bold uppercase text-slate-400">Rumbo</div>
+                    <div class="text-2xl font-black font-mono text-slate-200" id="valHeading">000°</div>
+                    <div class="text-[10px] text-slate-500 font-bold">GRADOS</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-[10px] font-bold uppercase text-slate-400">Área Trab.</div>
+                    <div class="text-2xl font-black font-mono text-emerald-400" id="valArea">0.00</div>
+                    <div class="text-[10px] text-slate-500 font-bold">Hectáreas (Ha)</div>
+                </div>
+            </div>
+
+            <!-- Estado de Satélites / Precisión -->
+            <div class="bg-slate-900/80 backdrop-blur border border-slate-800/80 rounded-lg px-3 py-1.5 text-xs text-slate-400 flex items-center gap-3 w-fit">
+                <span><i class="fa-solid fa-satellite text-cyan-400 mr-1"></i> Precisión: <strong id="valAccuracy" class="text-slate-200">-- m</strong></span>
+                <span><i class="fa-solid fa-route text-amber-400 mr-1"></i> Línea: <strong id="valLineNumber" class="text-slate-200">--</strong></span>
+            </div>
+        </div>
+
+        <!-- ACCIONES RÁPIDAS Y CONTROLES DERECHA -->
+        <div class="absolute top-4 right-4 z-10 flex flex-col gap-3">
+            <button onclick="toggleWorkPainting()" id="btnPaint" class="w-16 h-16 rounded-2xl bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 text-slate-300 font-bold shadow-2xl flex flex-col items-center justify-center gap-1 transition active:scale-95">
+                <i class="fa-solid fa-spray-can text-xl" id="paintIcon"></i>
+                <span class="text-[10px]" id="paintText">Pausado</span>
+            </button>
+
+            <button onclick="recenterCamera()" class="w-12 h-12 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center shadow-lg transition active:scale-95 ml-auto">
+                <i class="fa-solid fa-crosshairs text-lg"></i>
+            </button>
+
+            <button onclick="openSettingsModal()" class="w-12 h-12 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center shadow-lg transition active:scale-95 ml-auto">
+                <i class="fa-solid fa-sliders text-lg"></i>
+            </button>
+
+            <button onclick="toggleDayNightMode()" class="w-12 h-12 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center shadow-lg transition active:scale-95 ml-auto">
+                <i class="fa-solid fa-moon text-lg" id="themeIcon"></i>
+            </button>
+        </div>
+
+        <!-- BARRA BOTTOM CONTROLES LINEA A-B Y IMPLEMENTO -->
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-full max-w-xl px-4 pointer-events-auto">
+            <div class="bg-slate-900/90 backdrop-blur border border-slate-800 p-2.5 rounded-2xl shadow-2xl flex items-center justify-between gap-2">
+                
+                <!-- Punto A -->
+                <button onclick="setPointA()" id="btnPointA" class="flex-1 py-3 px-4 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold rounded-xl flex items-center justify-center gap-2 transition active:scale-95">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <span>Fijar Punto A</span>
+                </button>
+
+                <!-- Punto B -->
+                <button onclick="setPointB()" id="btnPointB" class="flex-1 py-3 px-4 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-bold rounded-xl flex items-center justify-center gap-2 transition active:scale-95">
+                    <i class="fa-solid fa-flag-checkered"></i>
+                    <span>Fijar Punto B</span>
+                </button>
+
+                <!-- Borrar Traza / A-B -->
+                <button onclick="clearABLine()" title="Resetear A-B" class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 rounded-xl transition">
+                    <i class="fa-solid fa-trash-arrow-up"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- OVERLAY SIMULADOR (FLOTANTE SI SIMULACION ACTIVADA) -->
+        <div id="simControlPanel" class="hidden absolute bottom-20 left-4 z-10 bg-slate-900/95 border border-slate-800 p-3 rounded-2xl shadow-2xl max-w-xs w-full">
+            <div class="text-xs font-bold text-amber-400 mb-2 flex items-center justify-between">
+                <span><i class="fa-solid fa-gamepad mr-1"></i> Control de Simulación</span>
+                <span class="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded text-amber-300">DEMO</span>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-[10px] uppercase text-slate-400 font-bold flex justify-between">
+                        <span>Velocidad:</span>
+                        <span id="simSpeedVal" class="text-white font-mono">12 km/h</span>
+                    </label>
+                    <input type="range" id="simSpeed" min="0" max="35" value="12" step="1" oninput="updateSimParams()" class="w-full accent-amber-500">
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase text-slate-400 font-bold flex justify-between">
+                        <span>Dirección / Volante:</span>
+                        <span id="simSteerVal" class="text-white font-mono">0°</span>
+                    </label>
+                    <input type="range" id="simSteer" min="-30" max="30" value="0" step="1" oninput="updateSimParams()" class="w-full accent-amber-500">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="resetSimHeading()" class="text-xs flex-1 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700">Enderezar</button>
+                    <button onclick="clearCoverage()" class="text-xs flex-1 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-300 rounded border border-red-700/50">Limpiar Trabajo</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODAL DE CONFIGURACIÓN Y CONEXIÓN GPS -->
+    <div id="settingsModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <!-- Header Modal -->
+            <div class="p-4 bg-slate-800/50 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-emerald-400"></i>
+                    Configuración de Banderillero
+                </h3>
+                <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Body Modal -->
+            <div class="p-5 overflow-y-auto space-y-6 text-sm">
+                
+                <!-- SECCIÓN 1: IMPLEMENTO Y ANCHO DE TRABAJO -->
+                <div>
+                    <h4 class="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">1. Maquinaria e Implemento</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1 font-semibold">Ancho de Trabajo (Metros)</label>
+                            <input type="number" id="inputToolWidth" value="18.0" step="0.5" min="1" max="60" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-300 mb-1 font-semibold">Sensibilidad Barra LED (cm)</label>
+                            <input type="number" id="inputTolerance" value="30" step="5" min="5" max="200" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="border-slate-800">
+
+                <!-- SECCIÓN 2: FUENTE DE DATOS GPS -->
+                <div>
+                    <h4 class="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">2. Receptor GPS / GNSS</h4>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                        <button onclick="selectGpsMode('internal')" id="gpsTabInternal" class="p-3 border rounded-xl text-center flex flex-col items-center gap-2 transition border-emerald-500 bg-emerald-500/10 text-emerald-400">
+                            <i class="fa-solid fa-mobile-screen-button text-xl"></i>
+                            <span class="text-xs font-bold">GPS Interno</span>
+                        </button>
+                        <button onclick="selectGpsMode('external')" id="gpsTabExternal" class="p-3 border border-slate-800 bg-slate-950 text-slate-400 rounded-xl text-center flex flex-col items-center gap-2 transition hover:border-slate-700">
+                            <i class="fa-solid fa-plug text-xl"></i>
+                            <span class="text-xs font-bold">GPS Ext. (Serial/WS)</span>
+                        </button>
+                        <button onclick="selectGpsMode('simulation')" id="gpsTabSim" class="p-3 border border-slate-800 bg-slate-950 text-slate-400 rounded-xl text-center flex flex-col items-center gap-2 transition hover:border-slate-700">
+                            <i class="fa-solid fa-desktop text-xl"></i>
+                            <span class="text-xs font-bold">Simulador Demo</span>
+                        </button>
+                    </div>
+
+                    <!-- Panel GPS Interno -->
+                    <div id="panelGpsInternal" class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-400">
+                        Utiliza el chip GPS incorporado de tu Tablet o Smartphone (HTML5 Geolocation API). Recomendado usar al aire libre.
+                    </div>
+
+                    <!-- Panel GPS Externo (Web Serial / NMEA Stream / WebSocket) -->
+                    <div id="panelGpsExternal" class="hidden space-y-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-300">Conectar por Web Serial API (USB/Bluetooth):</span>
+                            <button onclick="connectWebSerial()" class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg transition">
+                                <i class="fa-solid fa-usb mr-1"></i> Abrir Puerto Serial
+                            </button>
+                        </div>
+                        <div class="border-t border-slate-800 pt-3">
+                            <label class="block text-xs text-slate-400 mb-1">O Conectar con WebSocket / Servidor NMEA:</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="wsUrl" placeholder="ws://localhost:8080" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+                                <button onclick="connectWebSocket()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg border border-slate-700">Conectar WS</button>
+                            </div>
+                        </div>
+                        <div class="border-t border-slate-800 pt-2">
+                            <label class="block text-xs text-slate-400 mb-1">Entrada Manual NMEA Stream (Pegar $GPGGA / $GPRMC):</label>
+                            <textarea id="nmeaManualInput" rows="2" placeholder="$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 font-mono text-[11px] text-emerald-400 focus:outline-none"></textarea>
+                            <button onclick="processManualNmea()" class="mt-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded border border-slate-700">Enviar NMEA</button>
+                        </div>
+                    </div>
+
+                    <!-- Panel Simulador -->
+                    <div id="panelGpsSim" class="hidden p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-400">
+                        Modo de prueba de escritorio. Genera movimiento virtual de maquinaria con velocidad, rumbo y ancho de trabajo ajustables.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Modal -->
+            <div class="p-4 bg-slate-800/50 border-t border-slate-800 flex justify-end">
+                <button onclick="saveAndCloseSettings()" class="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg transition">
+                    Guardar y Aplicar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT PRINCIPAL DE BANDERILLERO -->
+    <script>
+        // --- ESTADO GLOBAL DE LA APLICACIÓN ---
+        const state = {
+            gpsMode: 'internal', // 'internal', 'external', 'simulation'
+            isPainting: false,
+            audioEnabled: false,
+            darkMode: true,
+            
+            // Maquinaria
+            toolWidth: 18.0, // Ancho de labor en metros
+            toleranceCm: 30,  // Tolerancia del punto medio LED en cm
+
+            // Posición Maquinaria en Coordenadas UTM / Métricas Locales
+            currentPos: { x: 0, y: 0, lat: 0, lng: 0, speed: 0, heading: 0, accuracy: 0 },
+            lastPos: null,
+
+            // Puntos A-B para líneas paralelas de guiado
+            pointA: null, // {x, y}
+            pointB: null, // {x, y}
+            abHeading: 0, // Ángulo en radianes de A a B
+
+            // Cobertura / Traza recorrida
+            coveragePolygons: [], // Arreglo de polígonos/puntos de trabajo
+            workedAreaM2: 0,
+
+            // Vista Canvas
+            zoom: 1.5, // Píxeles por metro
+            panOffset: { x: 0, y: 0 },
+            isDragging: false,
+            dragStart: { x: 0, y: 0 },
+            autoRecenter: true,
+
+            // Audio Context
+            audioCtx: null,
+            lastBeepTime: 0,
+
+            // Simulador
+            sim: {
+                speedKmH: 12,
+                steerAngleDeg: 0,
+                timer: null
+            }
+        };
+
+        // DOM Elements
+        const canvas = document.getElementById('fieldCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- INICIALIZACIÓN DE LA APLICACIÓN ---
+        window.addEventListener('load', () => {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Eventos de Navegación por Arrastre (Mouse / Touch)
+            setupCanvasControls();
+
+            // Iniciar bucle de renderizado
+            requestAnimationFrame(renderLoop);
+
+            // Iniciar GPS por defecto (Interno)
+            initGpsMode('internal');
+        });
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+
+        // --- MATEMÁTICAS Y PROYECCIÓN GEOGRÁFICA (LAT/LNG -> METROS LOCALE) ---
+        // Conversión Equirectangular Simple para distancias locales (Agrícolas)
+        let refLat = null;
+        let refLng = null;
+
+        function latLngToLocalMeters(lat, lng) {
+            if (refLat === null) {
+                refLat = lat;
+                refLng = lng;
+            }
+            const R = 6371000; // Radio terrestre en metros
+            const dLat = (lat - refLat) * Math.PI / 180;
+            const dLng = (lng - refLng) * Math.PI / 180;
+            const x = dLng * Math.cos(refLat * Math.PI / 180) * R;
+            const y = dLat * R;
+            return { x, y };
+        }
+
+        function calculateXTE(pos, A, B) {
+            if (!A || !B) return 0;
+            // Distancia perpendicular de pos a la línea A-B
+            const dx = B.x - A.x;
+            const dy = B.y - A.y;
+            const len = Math.hypot(dx, dy);
+            if (len === 0) return 0;
+
+            // Vector unitario A-B
+            const uX = dx / len;
+            const uY = dy / len;
+
+            // Vector A -> Posición actual
+            const vX = pos.x - A.x;
+            const vY = pos.y - A.y;
+
+            // Proyección en línea
+            const projLen = vX * uX + vY * uY;
+            
+            // Desviación lateral (Producto cruzado 2D)
+            const xte = vX * uY - vY * uX;
+            return xte; // Positivo = Derecha, Negativo = Izquierda
+        }
+
+        // --- MANEJO DE GPS Y NMEA ---
+        function initGpsMode(mode) {
+            state.gpsMode = mode;
+            stopAllGpsSources();
+
+            const statusDot = document.getElementById('gpsStatusDot');
+            const statusText = document.getElementById('gpsStatusText');
+
+            if (mode === 'internal') {
+                statusDot.className = "inline-flex items-center justify-center w-3 h-3 rounded-full bg-emerald-500 animate-pulse";
+                statusText.innerText = "GPS Interno Activo";
+                startInternalGps();
+            } else if (mode === 'external') {
+                statusDot.className = "inline-flex items-center justify-center w-3 h-3 rounded-full bg-cyan-500";
+                statusText.innerText = "GPS Ext. Esperando Datos";
+            } else if (mode === 'simulation') {
+                statusDot.className = "inline-flex items-center justify-center w-3 h-3 rounded-full bg-amber-500";
+                statusText.innerText = "Modo Simulación Demo";
+                document.getElementById('simControlPanel').classList.remove('hidden');
+                startSimulation();
+            }
+        }
+
+        function stopAllGpsSources() {
+            if (window.watchPositionId) {
+                navigator.geolocation.clearWatch(window.watchPositionId);
+                window.watchPositionId = null;
+            }
+            if (state.sim.timer) {
+                clearInterval(state.sim.timer);
+                state.sim.timer = null;
+            }
+            document.getElementById('simControlPanel').classList.add('hidden');
+        }
+
+        // 1. GPS Interno
+        function startInternalGps() {
+            if ("geolocation" in navigator) {
+                window.watchPositionId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        const speedKmH = (pos.coords.speed || 0) * 3.6;
+                        const headingDeg = pos.coords.heading || state.currentPos.heading;
+                        const accuracy = pos.coords.accuracy || 0;
+
+                        updatePosition(lat, lng, speedKmH, headingDeg, accuracy);
+                    },
+                    (err) => {
+                        console.warn("Error GPS Interno:", err.message);
+                        document.getElementById('gpsStatusText').innerText = "Error Lectura GPS";
+                    },
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+                );
+            }
+        }
+
+        // 2. GPS External: Parseador de NMEA ($GPGGA / $GPRMC)
+        function parseNMEA(nmeaSentence) {
+            const lines = nmeaSentence.split('\n');
+            lines.forEach(line => {
+                const parts = line.trim().split(',');
+                if (parts[0].includes('GGA')) {
+                    // $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
+                    if (parts[2] && parts[4]) {
+                        const lat = parseNMEACoord(parts[2], parts[3]);
+                        const lng = parseNMEACoord(parts[4], parts[5]);
+                        const acc = parseFloat(parts[8]) || 1.0;
+                        updatePosition(lat, lng, state.currentPos.speed, state.currentPos.heading, acc);
+                    }
+                } else if (parts[0].includes('RMC')) {
+                    // $GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A
+                    if (parts[3] && parts[5]) {
+                        const lat = parseNMEACoord(parts[3], parts[4]);
+                        const lng = parseNMEACoord(parts[5], parts[6]);
+                        const speedKnots = parseFloat(parts[7]) || 0;
+                        const heading = parseFloat(parts[8]) || state.currentPos.heading;
+                        updatePosition(lat, lng, speedKnots * 1.852, heading, 1.0);
+                    }
+                }
+            });
+        }
+
+        function parseNMEACoord(coord, dir) {
+            if (!coord) return 0;
+            const dotIdx = coord.indexOf('.');
+            const degs = parseFloat(coord.slice(0, dotIdx - 2));
+            const mins = parseFloat(coord.slice(dotIdx - 2));
+            let val = degs + (mins / 60);
+            if (dir === 'S' || dir === 'W') val = -val;
+            return val;
+        }
+
+        // Web Serial API para Receptores GPS USB / Serie
+        async function connectWebSerial() {
+            if ("serial" in navigator) {
+                try {
+                    const port = await navigator.serial.requestPort();
+                    await port.open({ baudRate: 9600 });
+                    document.getElementById('gpsStatusText').innerText = "GPS Serial Conectado";
+                    
+                    const textDecoder = new TextDecoderStream();
+                    const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+                    const reader = textDecoder.readable.getReader();
+
+                    let buffer = "";
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buffer += value;
+                        const lines = buffer.split('\r\n');
+                        buffer = lines.pop(); // Guardar remanente
+                        lines.forEach(line => parseNMEA(line));
+                    }
+                } catch (err) {
+                    alert("Error al conectar puerto serial: " + err.message);
+                }
+            } else {
+                alert("Tu navegador no soporta Web Serial API. Usa Chrome o Edge en Android/Desktop.");
+            }
+        }
+
+        // WebSocket para NMEA Stream remoto
+        function connectWebSocket() {
+            const url = document.getElementById('wsUrl').value;
+            if (!url) return;
+            try {
+                const ws = new WebSocket(url);
+                ws.onopen = () => {
+                    document.getElementById('gpsStatusText').innerText = "WebSocket GPS Conectado";
+                };
+                ws.onmessage = (event) => {
+                    parseNMEA(event.data);
+                };
+                ws.onerror = () => alert("Error en conexión WebSocket GPS");
+            } catch (e) {
+                alert("No se pudo abrir WebSocket: " + e.message);
+            }
+        }
+
+        function processManualNmea() {
+            const text = document.getElementById('nmeaManualInput').value;
+            parseNMEA(text);
+        }
+
+        // 3. Simulador Demo de Maquinaria
+        function startSimulation() {
+            if (refLat === null) {
+                refLat = -31.4201;
+                refLng = -64.1887;
+            }
+            state.currentPos = { x: 0, y: 0, lat: refLat, lng: refLng, speed: state.sim.speedKmH, heading: 0, accuracy: 0.2 };
+
+            state.sim.timer = setInterval(() => {
+                const dt = 0.1; // 100ms
+                const speedMS = state.sim.speedKmH / 3.6;
+
+                // Actualizar dirección por volante simulado
+                state.currentPos.heading = (state.currentPos.heading + state.sim.steerAngleDeg * 0.1) % 360;
+                if (state.currentPos.heading < 0) state.currentPos.heading += 360;
+
+                const rad = state.currentPos.heading * Math.PI / 180;
+                const dx = Math.sin(rad) * speedMS * dt;
+                const dy = Math.cos(rad) * speedMS * dt;
+
+                const newX = state.currentPos.x + dx;
+                const newY = state.currentPos.y + dy;
+
+                updatePositionFromMetric(newX, newY, state.sim.speedKmH, state.currentPos.heading, 0.2);
+            }, 100);
+        }
+
+        function updateSimParams() {
+            state.sim.speedKmH = parseFloat(document.getElementById('simSpeed').value);
+            state.sim.steerAngleDeg = parseFloat(document.getElementById('simSteer').value);
+            document.getElementById('simSpeedVal').innerText = state.sim.speedKmH + " km/h";
+            document.getElementById('simSteerVal').innerText = state.sim.steerAngleDeg + "°";
+        }
+
+        function resetSimHeading() {
+            document.getElementById('simSteer').value = 0;
+            updateSimParams();
+        }
+
+        // --- ACTUALIZACIÓN DE POSICIÓN Y CÁLCULO DE TRABAJO ---
+        function updatePosition(lat, lng, speedKmH, headingDeg, accuracy) {
+            const pos = latLngToLocalMeters(lat, lng);
+            updatePositionFromMetric(pos.x, pos.y, speedKmH, headingDeg, accuracy, lat, lng);
+        }
+
+        function updatePositionFromMetric(x, y, speedKmH, headingDeg, accuracy, lat = 0, lng = 0) {
+            const prevPos = { ...state.currentPos };
+            
+            // Calculo suavizado de rumbo si no viene directo del GPS
+            let finalHeading = headingDeg;
+            if (Math.hypot(x - prevPos.x, y - prevPos.y) > 0.2) {
+                const calcAngle = Math.atan2(x - prevPos.x, y - prevPos.y) * 180 / Math.PI;
+                finalHeading = calcAngle < 0 ? calcAngle + 360 : calcAngle;
+            }
+
+            state.currentPos = { x, y, lat, lng, speed: speedKmH, heading: finalHeading, accuracy };
+
+            // Si está activo el modo Pintar / Cobertura
+            if (state.isPainting && Math.hypot(x - prevPos.x, y - prevPos.y) > 0.1) {
+                recordCoverageSegment(prevPos, state.currentPos);
+            }
+
+            // Actualizar interfaz y barra de luces
+            updateUI();
+
+            // Recalcular Audio Beep
+            handleAudioFeedback();
+        }
+
+        function recordCoverageSegment(p1, p2) {
+            const rad = p2.heading * Math.PI / 180;
+            const halfW = state.toolWidth / 2;
+
+            // Vector perpendicular
+            const nx = Math.cos(rad) * halfW;
+            const ny = -Math.sin(rad) * halfW;
+
+            // Polígono de la franja (Trapezoide de avance)
+            const poly = [
+                { x: p1.x - nx, y: p1.y - ny },
+                { x: p1.x + nx, y: p1.y + ny },
+                { x: p2.x + nx, y: p2.y + ny },
+                { x: p2.x - nx, y: p2.y - ny }
+            ];
+
+            state.coveragePolygons.push(poly);
+
+            // Aproximación de área (distancia x ancho)
+            const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            state.workedAreaM2 += dist * state.toolWidth;
+        }
+
+        // --- MANEJO DE LÍNEAS DE GUIADO A-B ---
+        function setPointA() {
+            state.pointA = { x: state.currentPos.x, y: state.currentPos.y };
+            document.getElementById('btnPointA').classList.add('bg-emerald-500', 'text-slate-950');
+            document.getElementById('btnPointA').classList.remove('bg-emerald-600/20', 'text-emerald-300');
+        }
+
+        function setPointB() {
+            if (!state.pointA) {
+                alert("Primero debes establecer el Punto A");
+                return;
+            }
+            state.pointB = { x: state.currentPos.x, y: state.currentPos.y };
+            state.abHeading = Math.atan2(state.pointB.x - state.pointA.x, state.pointB.y - state.pointA.y);
+            
+            document.getElementById('btnPointB').classList.add('bg-amber-500', 'text-slate-950');
+            document.getElementById('btnPointB').classList.remove('bg-amber-600/20', 'text-amber-300');
+        }
+
+        function clearABLine() {
+            state.pointA = null;
+            state.pointB = null;
+            document.getElementById('btnPointA').className = "flex-1 py-3 px-4 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold rounded-xl flex items-center justify-center gap-2 transition active:scale-95";
+            document.getElementById('btnPointB').className = "flex-1 py-3 px-4 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-bold rounded-xl flex items-center justify-center gap-2 transition active:scale-95";
+        }
+
+        function toggleWorkPainting() {
+            state.isPainting = !state.isPainting;
+            const btn = document.getElementById('btnPaint');
+            const icon = document.getElementById('paintIcon');
+            const text = document.getElementById('paintText');
+
+            if (state.isPainting) {
+                btn.className = "w-16 h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 border-2 border-emerald-300 text-slate-950 font-bold shadow-2xl flex flex-col items-center justify-center gap-1 transition active:scale-95 animate-pulse";
+                text.innerText = "Pintando";
+            } else {
+                btn.className = "w-16 h-16 rounded-2xl bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 text-slate-300 font-bold shadow-2xl flex flex-col items-center justify-center gap-1 transition active:scale-95";
+                text.innerText = "Pausado";
+            }
+        }
+
+        function clearCoverage() {
+            state.coveragePolygons = [];
+            state.workedAreaM2 = 0;
+            updateUI();
+        }
+
+        // --- ACTUALIZACIÓN DE UI Y BARRA DE LUCES (LIGHTBAR) ---
+        function updateUI() {
+            document.getElementById('valSpeed').innerText = state.currentPos.speed.toFixed(1);
+            document.getElementById('valHeading').innerText = Math.round(state.currentPos.heading).toString().padStart(3, '0') + '°';
+            
+            // Conversión m2 a Hectáreas
+            const ha = state.workedAreaM2 / 10000;
+            document.getElementById('valArea').innerText = ha.toFixed(2);
+            document.getElementById('valAccuracy').innerText = state.currentPos.accuracy ? (state.currentPos.accuracy.toFixed(1) + ' m') : '-- m';
+
+            // Cálculo XTE
+            let xte = 0;
+            let lineNumber = '--';
+
+            if (state.pointA && state.pointB) {
+                const rawXte = calculateXTE(state.currentPos, state.pointA, state.pointB);
+                
+                // Calcular número de pasada virtual más cercana
+                const passIndex = Math.round(rawXte / state.toolWidth);
+                lineNumber = passIndex === 0 ? "A-B Central" : (passIndex > 0 ? `Pasada +${passIndex}` : `Pasada ${passIndex}`);
+
+                // Desviación con respecto a la pasada actual
+                xte = rawXte - (passIndex * state.toolWidth);
+            }
+
+            document.getElementById('valLineNumber').innerText = lineNumber;
+            
+            // Actualizar texto XTE
+            const xteText = (xte >= 0 ? "+" : "") + xte.toFixed(2) + " m";
+            document.getElementById('xteValueMobile').innerText = xteText;
+            document.getElementById('xteValueDesktop').innerText = xteText;
+
+            // Renderizar Barra LED de Guiado
+            updateLightbar(xte);
+        }
+
+        function updateLightbar(xteMeters) {
+            const xteCm = xteMeters * 100;
+            const tol = state.toleranceCm; // Tolerancia central por ejemplo 30cm
+
+            const leds = {
+                L3: document.getElementById('led-L3'),
+                L2: document.getElementById('led-L2'),
+                L1: document.getElementById('led-L1'),
+                C:  document.getElementById('led-C'),
+                R1: document.getElementById('led-R1'),
+                R2: document.getElementById('led-R2'),
+                R3: document.getElementById('led-R3')
+            };
+
+            // Resetear todos
+            Object.values(leds).forEach(el => el.className = "w-full max-w-[28px] h-7 rounded bg-slate-800 transition-all duration-75");
+            leds.C.className = "w-8 h-8 rounded bg-slate-800 transition-all duration-75 flex items-center justify-center font-bold text-xs";
+
+            if (Math.abs(xteCm) <= tol) {
+                // Dentro de tolerancia (Punto Verde Central)
+                leds.C.className = "w-8 h-8 rounded bg-emerald-500 led-glow-green text-slate-950 transition-all duration-75 flex items-center justify-center font-bold text-xs";
+            } else if (xteCm < 0) {
+                // Desviado a la izquierda -> Corregir a la Derecha
+                const dev = Math.abs(xteCm);
+                if (dev > tol) leds.L1.className = "w-full max-w-[28px] h-7 rounded bg-yellow-500 led-glow-yellow";
+                if (dev > tol * 2) leds.L2.className = "w-full max-w-[28px] h-7 rounded bg-amber-600 led-glow-yellow";
+                if (dev > tol * 3) leds.L3.className = "w-full max-w-[28px] h-7 rounded bg-red-600 led-glow-red";
+            } else {
+                // Desviado a la derecha -> Corregir a la Izquierda
+                const dev = Math.abs(xteCm);
+                if (dev > tol) leds.R1.className = "w-full max-w-[28px] h-7 rounded bg-yellow-500 led-glow-yellow";
+                if (dev > tol * 2) leds.R2.className = "w-full max-w-[28px] h-7 rounded bg-amber-600 led-glow-yellow";
+                if (dev > tol * 3) leds.R3.className = "w-full max-w-[28px] h-7 rounded bg-red-600 led-glow-red";
+            }
+        }
+
+        // --- RENDERIZADO CANVAS 2D DE CAMPO Y MAQUINARIA ---
+        function renderLoop() {
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Color de Fondo (Día / Noche)
+            ctx.fillStyle = state.darkMode ? '#090d16' : '#e2e8f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Centro del canvas + Offset de Pan
+            const centerX = canvas.width / 2 + state.panOffset.x;
+            const centerY = canvas.height / 2 + state.panOffset.y;
+
+            ctx.translate(centerX, centerY);
+            
+            // Si el modo centrado automático está activo, seguir la máquina
+            if (state.autoRecenter) {
+                state.panOffset.x = -state.currentPos.x * state.zoom;
+                state.panOffset.y = state.currentPos.y * state.zoom; // Invertir Y para coordenadas de pantalla
+            }
+
+            // DIBUJAR GRID DE CAMPO
+            drawGrid();
+
+            // DIBUJAR LÍNEAS PARALELAS A-B
+            if (state.pointA && state.pointB) {
+                drawABLines();
+            }
+
+            // DIBUJAR POLÍGONOS DE TRABAJO (COBERTURA / PINTADO DE PULVERIZACIÓN)
+            drawCoverage();
+
+            // DIBUJAR TRACTOR / MAQUINARIA Y BARRA DE IMPLEMENTO
+            drawTractor();
+
+            ctx.restore();
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        function drawGrid() {
+            ctx.strokeStyle = state.darkMode ? '#1e293b' : '#cbd5e1';
+            ctx.lineWidth = 1;
+
+            const gridSize = 10 * state.zoom; // Rejilla cada 10 metros
+            const startX = -canvas.width * 2;
+            const endX = canvas.width * 2;
+            const startY = -canvas.height * 2;
+            const endY = canvas.height * 2;
+
+            ctx.beginPath();
+            for (let x = startX; x < endX; x += gridSize) {
+                ctx.moveTo(x, startY);
+                ctx.lineTo(x, endY);
+            }
+            for (let y = startY; y < endY; y += gridSize) {
+                ctx.moveTo(startX, y);
+                ctx.lineTo(endX, y);
+            }
+            ctx.stroke();
+        }
+
+        function drawABLines() {
+            const pA = { x: state.pointA.x * state.zoom, y: -state.pointA.y * state.zoom };
+            const pB = { x: state.pointB.x * state.zoom, y: -state.pointB.y * state.zoom };
+
+            const dx = pB.x - pA.x;
+            const dy = pB.y - pA.y;
+            const len = Math.hypot(dx, dy);
+            if (len === 0) return;
+
+            // Vector unitario y normal
+            const uX = dx / len;
+            const uY = dy / len;
+            const nX = -uY;
+            const nY = uX;
+
+            const passWidth = state.toolWidth * state.zoom;
+            const lineExtent = 5000; // Largo visual de las pasadas
+
+            // Dibujar Pasada Central (A-B) y 15 pasadas paralelas a cada lado
+            for (let i = -15; i <= 15; i++) {
+                const offsetX = nX * passWidth * i;
+                const offsetY = nY * passWidth * i;
+
+                ctx.beginPath();
+                ctx.moveTo(pA.x + offsetX - uX * lineExtent, pA.y + offsetY - uY * lineExtent);
+                ctx.lineTo(pB.x + offsetX + uX * lineExtent, pB.y + offsetY + uY * lineExtent);
+
+                if (i === 0) {
+                    // Línea Madre A-B
+                    ctx.strokeStyle = '#eab308'; // Amarillo
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([10, 5]);
+                } else {
+                    // Líneas paralelas virtuales
+                    ctx.strokeStyle = state.darkMode ? 'rgba(59, 130, 246, 0.4)' : 'rgba(37, 99, 235, 0.4)';
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([5, 5]);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Dibujar íconos Puntos A y B
+            drawMarker(pA.x, pA.y, 'A', '#22c55e');
+            drawMarker(pB.x, pB.y, 'B', '#eab308');
+        }
+
+        function drawMarker(x, y, text, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x, y);
+        }
+
+        function drawCoverage() {
+            ctx.fillStyle = state.darkMode ? 'rgba(34, 197, 94, 0.35)' : 'rgba(34, 197, 94, 0.5)';
+            ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
+            ctx.lineWidth = 1;
+
+            state.coveragePolygons.forEach(poly => {
+                ctx.beginPath();
+                ctx.moveTo(poly[0].x * state.zoom, -poly[0].y * state.zoom);
+                ctx.lineTo(poly[1].x * state.zoom, -poly[1].y * state.zoom);
+                ctx.lineTo(poly[2].x * state.zoom, -poly[2].y * state.zoom);
+                ctx.lineTo(poly[3].x * state.zoom, -poly[3].y * state.zoom);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+
+        function drawTractor() {
+            const posX = state.currentPos.x * state.zoom;
+            const posY = -state.currentPos.y * state.zoom;
+            const rad = (state.currentPos.heading) * Math.PI / 180;
+
+            ctx.save();
+            ctx.translate(posX, posY);
+            ctx.rotate(rad);
+
+            // Barra del Implemento Agrícola
+            const toolWidthPx = state.toolWidth * state.zoom;
+            ctx.strokeStyle = '#ef4444'; // Rojo Implemento
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(-toolWidthPx / 2, 0);
+            ctx.lineTo(toolWidthPx / 2, 0);
+            ctx.stroke();
+
+            // Picos/Secciones de pulverización en la barra
+            ctx.fillStyle = '#ef4444';
+            const numNozzles = 7;
+            for (let i = 0; i < numNozzles; i++) {
+                const nx = -toolWidthPx / 2 + (toolWidthPx / (numNozzles - 1)) * i;
+                ctx.fillRect(nx - 2, -3, 4, 6);
+            }
+
+            // Cuerpo del Tractor
+            ctx.fillStyle = '#22c55e'; // Verde John Deere / Agrícola
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+
+            // Chasis
+            ctx.beginPath();
+            ctx.roundRect(-8, -18, 16, 28, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            // Cabina
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.roundRect(-6, -8, 12, 12, 2);
+            ctx.fill();
+
+            // Flecha indicadora de dirección de avance
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.moveTo(0, 16);
+            ctx.lineTo(-6, 8);
+            ctx.lineTo(6, 8);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // --- MANEJO DE VISTA, NAVEGACIÓN Y TOUCH ---
+        function setupCanvasControls() {
+            // Zoom con Rueda de Mouse
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                state.autoRecenter = false;
+                const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+                state.zoom = Math.min(Math.max(state.zoom * zoomFactor, 0.2), 15);
+            }, { passive: false });
+
+            // Drag / Pan con Mouse
+            canvas.addEventListener('mousedown', (e) => {
+                state.isDragging = true;
+                state.autoRecenter = false;
+                state.dragStart = { x: e.clientX - state.panOffset.x, y: e.clientY - state.panOffset.y };
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!state.isDragging) return;
+                state.panOffset.x = e.clientX - state.dragStart.x;
+                state.panOffset.y = e.clientY - state.dragStart.y;
+            });
+
+            window.addEventListener('mouseup', () => state.isDragging = false);
+
+            // Controles Táctiles (Touch / Mobile)
+            let initialPinchDist = null;
+
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    state.isDragging = true;
+                    state.autoRecenter = false;
+                    state.dragStart = { x: e.touches[0].clientX - state.panOffset.x, y: e.touches[0].clientY - state.panOffset.y };
+                } else if (e.touches.length === 2) {
+                    initialPinchDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1 && state.isDragging) {
+                    state.panOffset.x = e.touches[0].clientX - state.dragStart.x;
+                    state.panOffset.y = e.touches[0].clientY - state.dragStart.y;
+                } else if (e.touches.length === 2 && initialPinchDist) {
+                    const currentDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const factor = currentDist / initialPinchDist;
+                    state.zoom = Math.min(Math.max(state.zoom * (factor > 1 ? 1.03 : 0.97), 0.2), 15);
+                }
+            });
+
+            canvas.addEventListener('touchend', () => {
+                state.isDragging = false;
+                initialPinchDist = null;
+            });
+        }
+
+        function recenterCamera() {
+            state.autoRecenter = true;
+        }
+
+        // --- SISTEMA DE ALERTA SONORA (AUDIO BEEP) ---
+        function toggleAudio() {
+            state.audioEnabled = !state.audioEnabled;
+            const icon = document.getElementById('audioIcon');
+            if (state.audioEnabled) {
+                icon.className = "fa-solid fa-volume-high text-emerald-400";
+                if (!state.audioCtx) {
+                    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            } else {
+                icon.className = "fa-solid fa-volume-xmark text-slate-400";
+            }
+        }
+
+        function handleAudioFeedback() {
+            if (!state.audioEnabled || !state.pointA || !state.pointB || !state.audioCtx) return;
+
+            const now = Date.now();
+            const xteMeters = calculateXTE(state.currentPos, state.pointA, state.pointB);
+            const passIndex = Math.round(xteMeters / state.toolWidth);
+            const devCm = Math.abs((xteMeters - (passIndex * state.toolWidth)) * 100);
+
+            // Emitir pitido de advertencia si excede tolerancia
+            if (devCm > state.toleranceCm && now - state.lastBeepTime > 300) {
+                playBeepSound(devCm > state.toleranceCm * 2 ? 880 : 440);
+                state.lastBeepTime = now;
+            }
+        }
+
+        function playBeepSound(freq) {
+            try {
+                const osc = state.audioCtx.createOscillator();
+                const gain = state.audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, state.audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, state.audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(state.audioCtx.destination);
+                osc.start();
+                osc.stop(state.audioCtx.currentTime + 0.1);
+            } catch (e) {
+                console.error("Error al reproducir audio:", e);
+            }
+        }
+
+        // --- MODAL DE CONFIGURACIÓN Y MODO DIA/NOCHE ---
+        function openSettingsModal() {
+            document.getElementById('inputToolWidth').value = state.toolWidth;
+            document.getElementById('inputTolerance').value = state.toleranceCm;
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function selectGpsMode(mode) {
+            ['Internal', 'External', 'Sim'].forEach(m => {
+                const btn = document.getElementById(`gpsTab${m}`);
+                const panel = document.getElementById(`panelGps${m}`);
+                btn.className = "p-3 border border-slate-800 bg-slate-950 text-slate-400 rounded-xl text-center flex flex-col items-center gap-2 transition hover:border-slate-700";
+                panel.classList.add('hidden');
+            });
+
+            const currentBtn = document.getElementById(`gpsTab${mode === 'internal' ? 'Internal' : (mode === 'external' ? 'External' : 'Sim')}`);
+            const currentPanel = document.getElementById(`panelGps${mode === 'internal' ? 'Internal' : (mode === 'external' ? 'External' : 'Sim')}`);
+            
+            currentBtn.className = "p-3 border rounded-xl text-center flex flex-col items-center gap-2 transition border-emerald-500 bg-emerald-500/10 text-emerald-400";
+            currentPanel.classList.remove('hidden');
+
+            state.tempSelectedGpsMode = mode;
+        }
+
+        function saveAndCloseSettings() {
+            state.toolWidth = parseFloat(document.getElementById('inputToolWidth').value) || 18.0;
+            state.toleranceCm = parseFloat(document.getElementById('inputTolerance').value) || 30;
+
+            if (state.tempSelectedGpsMode) {
+                initGpsMode(state.tempSelectedGpsMode);
+            }
+
+            closeSettingsModal();
+        }
+
+        function toggleDayNightMode() {
+            state.darkMode = !state.darkMode;
+            const themeIcon = document.getElementById('themeIcon');
+            themeIcon.className = state.darkMode ? "fa-solid fa-moon text-lg" : "fa-solid fa-sun text-lg text-amber-400";
+        }
+    </script>
+</body>
+</html>
