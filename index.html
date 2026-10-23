@@ -305,5 +305,186 @@
       // Actualizar UI
       document.getElementById('val-speed').innerText = speedKmH.toFixed(1);
       document.getElementById('val-xte').innerText = Math.abs(xte).toFixed(2);
-      document.getElementById('val-area').innerText = (totalAreaM2 / 1
-                                                       
+      document.getElementById('val-area').innerText = (totalAreaM2 / 10000).toFixed(2);
+      document.getElementById('val-pass').innerText = currentPass;
+
+      updateLightbar(xte);
+    }
+
+    // --- RENDERIZADO DEL MAPA ---
+    function renderMap() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      // Centro de pantalla
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+
+      ctx.translate(centerX, centerY);
+      ctx.scale(zoomLevel, -zoomLevel); // Invertir Y para coordenadas cartesianas estándar
+      ctx.translate(-posX, -posY);
+
+      // 1. Dibujar Grilla de Campo
+      drawGrid();
+
+      // 2. Dibujar Cobertura / Franja Trabajada
+      drawCoverage();
+
+      // 3. Dibujar Líneas Paralelas A-B
+      if (pointA && abHeading !== null) {
+        drawABLines();
+      }
+
+      // 4. Dibujar Maquinaria / Tractor
+      drawTractor();
+
+      ctx.restore();
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1 / zoomLevel;
+      const gridSize = 50;
+
+      const minX = posX - (canvas.width / (2 * zoomLevel));
+      const maxX = posX + (canvas.width / (2 * zoomLevel));
+      const minY = posY - (canvas.height / (2 * zoomLevel));
+      const maxY = posY + (canvas.height / (2 * zoomLevel));
+
+      const startX = Math.floor(minX / gridSize) * gridSize;
+      const startY = Math.floor(minY / gridSize) * gridSize;
+
+      ctx.beginPath();
+      for (let x = startX; x < maxX; x += gridSize) {
+        ctx.moveTo(x, minY);
+        ctx.lineTo(x, maxY);
+      }
+      for (let y = startY; y < maxY; y += gridSize) {
+        ctx.moveTo(minX, y);
+        ctx.lineTo(maxX, y);
+      }
+      ctx.stroke();
+    }
+
+    function drawCoverage() {
+      if (coveragePath.length < 2) return;
+
+      ctx.strokeStyle = 'rgba(34, 197, 94, 0.4)'; // Verde Semitransparente
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (let i = 1; i < coveragePath.length; i++) {
+        const p1 = coveragePath[i - 1];
+        const p2 = coveragePath[i];
+        ctx.lineWidth = p2.width;
+
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+    }
+
+    function drawABLines() {
+      const lineLength = 2000;
+      ctx.lineWidth = 1.5 / zoomLevel;
+
+      // Dibujar pasadas paralelas
+      for (let i = -10; i <= 10; i++) {
+        const offset = i * implementWidth;
+        const startX = pointA.x + Math.cos(abHeading) * offset - Math.sin(abHeading) * lineLength;
+        const startY = pointA.y - Math.sin(abHeading) * offset - Math.cos(abHeading) * lineLength;
+        const endX = pointA.x + Math.cos(abHeading) * offset + Math.sin(abHeading) * lineLength;
+        const endY = pointA.y - Math.sin(abHeading) * offset + Math.cos(abHeading) * lineLength;
+
+        ctx.strokeStyle = (i === 0) ? '#38bdf8' : 'rgba(255, 255, 255, 0.2)';
+        if (i === 0) ctx.setLineDash([5 / zoomLevel, 5 / zoomLevel]);
+        else ctx.setLineDash([]);
+
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    function drawTractor() {
+      ctx.save();
+      ctx.translate(posX, posY);
+      ctx.rotate(-heading * Math.PI / 180);
+
+      // Implemento / Barral
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(-implementWidth / 2, -0.5, implementWidth, 1);
+
+      // Tractor
+      ctx.fillStyle = '#3b82f6';
+      ctx.beginPath();
+      ctx.moveTo(0, 3);
+      ctx.lineTo(-1.5, -2);
+      ctx.lineTo(1.5, -2);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // --- CAMBIO DE MODO GPS / SIMULADOR ---
+    function setMode(m) {
+      mode = m;
+      document.getElementById('sim-controls').style.display = (m === 'sim') ? 'flex' : 'none';
+      
+      document.getElementById('btn-mode-sim').className = (m === 'sim') ? 'px-3 py-1 text-xs font-bold rounded bg-blue-600' : 'px-3 py-1 text-xs font-bold rounded bg-gray-700';
+      document.getElementById('btn-mode-gps').className = (m === 'gps') ? 'px-3 py-1 text-xs font-bold rounded bg-blue-600' : 'px-3 py-1 text-xs font-bold rounded bg-gray-700';
+      document.getElementById('btn-mode-ext').className = (m === 'ext') ? 'px-3 py-1 text-xs font-bold rounded bg-blue-600' : 'px-3 py-1 text-xs font-bold rounded bg-gray-700';
+
+      const status = document.getElementById('gps-status');
+      if (m === 'sim') {
+        status.innerText = 'Simulador Activo';
+        status.className = 'px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white font-semibold';
+      } else if (m === 'gps') {
+        startInternalGPS();
+      } else if (m === 'ext') {
+        status.innerText = 'Esperando Serial NMEA...';
+        status.className = 'px-2 py-0.5 text-xs rounded-full bg-yellow-600 text-white font-semibold';
+      }
+    }
+
+    function startInternalGPS() {
+      const status = document.getElementById('gps-status');
+      if ('geolocation' in navigator) {
+        navigator.geolocation.watchPosition((pos) => {
+          status.innerText = 'GPS Conectado';
+          status.className = 'px-2 py-0.5 text-xs rounded-full bg-green-600 text-white font-semibold';
+
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          speedKmH = (pos.coords.speed || 0) * 3.6;
+          if (pos.coords.heading !== null && !isNaN(pos.coords.heading)) {
+            heading = pos.coords.heading;
+          }
+
+          if (originLat === null) {
+            originLat = lat;
+            originLon = lon;
+          }
+
+          // Conversión simplificada Lat/Lon a Metros Locales
+          posX = (lon - originLon) * (111320 * Math.cos(lat * Math.PI / 180));
+          posY = (lat - originLat) * 111320;
+
+        }, (err) => {
+          status.innerText = 'Error GPS';
+          status.className = 'px-2 py-0.5 text-xs rounded-full bg-red-600 text-white font-semibold';
+        }, {
+          enableHighAccuracy: true,
+          maximumAge: 0
+        });
+      }
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
