@@ -449,11 +449,14 @@
       const perpDist = dx * Math.cos(abHeading) - dy * Math.sin(abHeading);
       const activePassIndex = Math.round(perpDist / implementWidth);
 
-      // Corrección geométrica: Líneas estrictamente PARALELAS al vector A-B original
-      for (let i = -30; i <= 30; i++) {
+      // --- SOLUCIÓN: Rango dinámico basado en la pasada actual ---
+      // Dibuja 25 pasadas hacia la izquierda y 25 hacia la derecha de donde estás ahora mismo
+      const minPass = activePassIndex - 25;
+      const maxPass = activePassIndex + 25;
+
+      for (let i = minPass; i <= maxPass; i++) {
         const offset = i * implementWidth;
         
-        // Desplazamiento ortogonal correcto para mantener el paralelismo exacto
         const offsetX = Math.cos(abHeading) * offset;
         const offsetY = -Math.sin(abHeading) * offset;
 
